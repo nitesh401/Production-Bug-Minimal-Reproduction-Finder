@@ -41,9 +41,6 @@ flowchart TB
 
 ## Why five services and not one
 
-The prompt's constraint — *"do not make this a fake microservice project where each service only
-performs CRUD"* — shapes the boundaries:
-
 - **api-service** is deliberately thin. It validates, fingerprints requests for idempotency, and
   publishes a `SUBMIT` command. It never touches the algorithm.
 - **orchestrator-service** owns the *task graph*, not the algorithm. It decides "what task should
