@@ -1,0 +1,48 @@
+server:
+  port: 8082
+spring:
+  application:
+    name: reproduction-worker-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 500ms
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      group-id: reproduction-workers
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 1                 # one long-running task per poll => natural backpressure
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        max.poll.interval.ms: 900000      # a task may run for minutes
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: com.example.reproduction.*
+        spring.json.use.type.headers: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        spring.json.add.type.headers: false
+    listener:
+      ack-mode: record
+worker:
+  id: ${WORKER_ID:}
+  concurrency: ${WORKER_CONCURRENCY:2}          # Kafka listener threads = tasks in flight per worker instance
+  simulator-url: ${SIMULATOR_URL:http://localhost:8084}
+  orchestrator-url: ${ORCHESTRATOR_URL:http://localhost:8081}
+  evaluation-timeout: ${WORKER_EVALUATION_TIMEOUT:5s}
+  max-evaluation-threads: ${WORKER_MAX_EVAL_THREADS:8}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+logging:
+  pattern:
+    level: "%5p [corr=%X{correlationId:-}] [job=%X{jobId:-} task=%X{taskId:-} cand=%X{candidateId:-}]"

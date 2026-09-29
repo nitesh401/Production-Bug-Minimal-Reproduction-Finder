@@ -1,0 +1,9 @@
+com\example\reproduction\algorithm\GraphAlgorithmsTest.class
+com\example\reproduction\simulator\LocalEndToEndTest.class
+com\example\reproduction\util\CanonicalizationTest.class
+com\example\reproduction\algorithm\DominanceIndexTest.class
+com\example\reproduction\algorithm\DdminTest$Counting.class
+com\example\reproduction\simulator\ScenarioDiscoveryTest.class
+com\example\reproduction\algorithm\CandidateScorerTest.class
+com\example\reproduction\evaluation\CandidateEvaluatorTest.class
+com\example\reproduction\algorithm\DdminTest.class

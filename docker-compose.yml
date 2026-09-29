@@ -1,0 +1,157 @@
+version: "3.8"
+
+# Production Bug Minimal Reproduction Finder - local stack.
+# `docker compose up --build` starts everything: MySQL, Redis, Kafka (KRaft, no Zookeeper), and all 5 services.
+
+x-service-defaults: &service-defaults
+  networks: [reproduction-net]
+  restart: unless-stopped
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: reproduction-mysql
+    environment:
+      MYSQL_DATABASE: reproduction
+      MYSQL_USER: reproduction
+      MYSQL_PASSWORD: reproduction
+      MYSQL_ROOT_PASSWORD: root
+    ports: ["3306:3306"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./reproduction-persistence/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [reproduction-net]
+
+  redis:
+    image: redis:7-alpine
+    container_name: reproduction-redis
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [reproduction-net]
+
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: reproduction-kafka
+    ports: ["9092:9092"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      CLUSTER_ID: "reproduction-local-cluster-id-1"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [reproduction-net]
+
+  reproduction-simulator-service:
+    <<: *service-defaults
+    build: { context: ., dockerfile: reproduction-simulator-service/Dockerfile }
+    container_name: reproduction-simulator-service
+    ports: ["8084:8084"]
+    environment:
+      SIMULATOR_DEFAULT_SCENARIO: SIMPLE_AND
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8084/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  reproduction-analysis-service:
+    <<: *service-defaults
+    build: { context: ., dockerfile: reproduction-analysis-service/Dockerfile }
+    container_name: reproduction-analysis-service
+    ports: ["8083:8083"]
+    environment:
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP: kafka:9092
+    depends_on:
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8083/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  reproduction-worker-service:
+    <<: *service-defaults
+    build: { context: ., dockerfile: reproduction-worker-service/Dockerfile }
+    deploy:
+      replicas: 2
+    environment:
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP: kafka:9092
+      SIMULATOR_URL: http://reproduction-simulator-service:8084
+      ORCHESTRATOR_URL: http://reproduction-orchestrator-service:8081
+      WORKER_CONCURRENCY: 2
+    depends_on:
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      reproduction-simulator-service: { condition: service_healthy }
+
+  reproduction-orchestrator-service:
+    <<: *service-defaults
+    build: { context: ., dockerfile: reproduction-orchestrator-service/Dockerfile }
+    container_name: reproduction-orchestrator-service
+    ports: ["8081:8081"]
+    environment:
+      MYSQL_HOST: mysql
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP: kafka:9092
+      ANALYSIS_URL: http://reproduction-analysis-service:8083
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      reproduction-analysis-service: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  reproduction-api-service:
+    <<: *service-defaults
+    build: { context: ., dockerfile: reproduction-api-service/Dockerfile }
+    container_name: reproduction-api-service
+    ports: ["8080:8080"]
+    environment:
+      MYSQL_HOST: mysql
+      REDIS_HOST: redis
+      KAFKA_BOOTSTRAP: kafka:9092
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      reproduction-orchestrator-service: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+networks:
+  reproduction-net: {}
+
+volumes:
+  mysql-data: {}
