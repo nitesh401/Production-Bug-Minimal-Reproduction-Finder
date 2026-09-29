@@ -1,7 +1,7 @@
 # Production Bug Minimal Reproduction Finder
 
 Given a production request/state that fails, automatically discover the **smallest** subset of
-input/state that still reproduces the bug — and prove that it's minimal. This is [delta debugging]
+input/state that still reproduces the bug and prove that it's minimal. This is [delta debugging]
 (ddmin), made dependency-aware, distributed over Kafka, and wrapped in a small set of Spring Boot
 microservices around a **pure-Java, Spring-free algorithm core**.
 
@@ -14,7 +14,7 @@ flags, session state... Only a handful of those actually matter. Brute-forcing a
 `2^N` — for 24 fields that's 16.7 million evaluations. This system finds the minimal reproducing
 subset in tens of evaluations instead, using:
 
-- **delta debugging** (adaptive binary partitioning, not brute force) — see [ALGORITHM.md](ALGORITHM.md)
+- **delta debugging** (adaptive binary partitioning, not brute force) see [ALGORITHM.md](ALGORITHM.md)
 - **dependency-aware reduction** (Tarjan SCC, so it never tests malformed inputs) — see [ALGORITHM.md](ALGORITHM.md)
 - **caching + dominance pruning** (never evaluate the same or an implied candidate twice)
 - **distributed workers** over Kafka, coordinated by an orchestrator, with MySQL as the durable
