@@ -2,7 +2,7 @@
 
 ## What was actually compiled and run, and how
 
-This sandbox had **no network access** (Maven Central, npm, apt were all unreachable —
+This sandbox had (Maven Central, npm, apt were all unreachable —
 `curl` to `repo.maven.apache.org` returns `403 host_not_allowed`), so Maven itself could never
 download Spring Boot / Kafka / Redis / MySQL client jars here. Two different levels of rigor
 follow directly from that constraint:
