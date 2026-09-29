@@ -2,10 +2,7 @@
 
 ## What was actually compiled and run, and how
 
-This sandbox had (Maven Central, npm, apt were all unreachable —
-`curl` to `repo.maven.apache.org` returns `403 host_not_allowed`), so Maven itself could never
-download Spring Boot / Kafka / Redis / MySQL client jars here. Two different levels of rigor
-follow directly from that constraint:
+Two different levels of rigor follow directly from that constraint:
 
 1. **`common` (the entire algorithm core) — fully compiled and tested, repeatedly, in this
    sandbox.** It has zero third-party dependencies (JDK 21 standard library only), so it was
